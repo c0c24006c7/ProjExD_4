@@ -51,6 +51,9 @@ class Bird(pg.sprite.Sprite):
     state = "normal"
     hyper_life = 0
 
+    state = "normal"
+    hyper_life = 0
+
     def __init__(self, num: int, xy: tuple[int, int]):
         """
         こうかとん画像Surfaceを生成する
@@ -102,6 +105,12 @@ class Bird(pg.sprite.Sprite):
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.dire = tuple(sum_mv)
             self.image = self.imgs[self.dire]
+        if self.state == "hyper":
+            self.image = pg.transform.laplacian(self.image)
+            self.hyper_life -= 1
+            if self.hyper_life <=0:
+                self.state = "normal"
+        
         if self.state == "hyper":
             self.image = pg.transform.laplacian(self.image)
             self.hyper_life -= 1
@@ -180,39 +189,13 @@ class Bomb(pg.sprite.Sprite):
 
 class Beam(pg.sprite.Sprite):
     """
-    ビームに関するクラス
+    ビームに関するクラス（角度指定対応済み）
     """
-    def __init__(self, bird: Bird):
+    def __init__(self, bird: Bird, angle0: float = 0):
         """
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん
         """
-        super().__init__()
-        self.vx, self.vy = bird.dire
-        angle = math.degrees(math.atan2(-self.vy, self.vx))
-        self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), angle, 1.0)
-        self.vx = math.cos(math.radians(angle))
-        self.vy = -math.sin(math.radians(angle))
-        self.rect = self.image.get_rect()
-        self.rect.centery = bird.rect.centery+bird.rect.height*self.vy
-        self.rect.centerx = bird.rect.centerx+bird.rect.width*self.vx
-        self.speed = 10
-        self.state = "active"  # EMPで"inactive"に変更される
-
-
-    def update(self):
-        """
-        爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
-        EMPによって無効化された爆弾は衝突しても起爆しない
-        """
-        self.rect.move_ip(self.speed * self.vx, self.speed * self.vy)
-        if check_bound(self.rect) != (True, True):
-            self.kill()
-    
-        """
-    ビームに関するクラス（角度指定対応済み）
-    """
-    def __init__(self, bird: Bird, angle0: float = 0):
         super().__init__()
         self.vx, self.vy = bird.dire
         base_angle = math.degrees(math.atan2(-self.vy, self.vx)) + angle0
@@ -223,9 +206,14 @@ class Beam(pg.sprite.Sprite):
         self.rect.centery = bird.rect.centery + bird.rect.height * self.vy
         self.rect.centerx = bird.rect.centerx + bird.rect.width * self.vx
         self.speed = 10
+        self.state = "active"  # EMPで"inactive"に変更される
 
     def update(self):
-        self.rect.move_ip(self.speed*self.vx, self.speed*self.vy)
+        """
+        爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
+        EMPによって無効化された爆弾は衝突しても起爆しない
+        """
+        self.rect.move_ip(self.speed * self.vx, self.speed * self.vy)
         if check_bound(self.rect) != (True, True):
             self.kill()
 
@@ -371,6 +359,7 @@ def main():
     SHIELD_COST = 50
     SHIELD_DURATION = 400
     gravitys = pg.sprite.Group()
+    gravitys = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -391,24 +380,26 @@ def main():
                 if event.key == pg.K_RETURN and score.value >= 200:
                     gravitys.add(Gravity())
                     score.value -= 200
+
+            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+                if key_lst[pg.K_LSHIFT]:
+                    # 弾幕発射（Shift + Space） 
+                    nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
+                    beams.add(*nbeam.gen_beams())
+                else:
+                    # 通常の単発ビーム発射
+                    beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
+                score.value -= 100
+                bird.state = "hyper"
+                bird.hyper_life = 500
+
         # --- 防御壁発動キー（S） ---
         if key_lst[pg.K_s] and score.value >= SHIELD_COST and len(shields) == 0:
             shield = Shield(bird, SHIELD_DURATION)
             shields.add(shield)
             score.value -= SHIELD_COST
 
-        if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-            if key_lst[pg.K_LSHIFT] or key_lst[pg.K_RSHIFT]:
-                # 弾幕発射（Shift + Space）
-                nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
-                beams.add(*nbeam.gen_beams())
-            else:
-                # 通常の単発ビーム発射
-                beams.add(Beam(bird))
-        if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
-            score.value -= 100
-            bird.state = "hyper"
-            bird.hyper_life = 500
 
         screen.blit(bg_img, [0, 0])
 

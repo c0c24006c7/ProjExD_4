@@ -51,6 +51,9 @@ class Bird(pg.sprite.Sprite):
     state = "normal"
     hyper_life = 0
 
+    state = "normal"
+    hyper_life = 0
+
     def __init__(self, num: int, xy: tuple[int, int]):
         """
         こうかとん画像Surfaceを生成する
@@ -102,6 +105,12 @@ class Bird(pg.sprite.Sprite):
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.dire = tuple(sum_mv)
             self.image = self.imgs[self.dire]
+        if self.state == "hyper":
+            self.image = pg.transform.laplacian(self.image)
+            self.hyper_life -= 1
+            if self.hyper_life <=0:
+                self.state = "normal"
+        
         if self.state == "hyper":
             self.image = pg.transform.laplacian(self.image)
             self.hyper_life -= 1
@@ -350,6 +359,7 @@ def main():
     SHIELD_COST = 50
     SHIELD_DURATION = 400
     gravitys = pg.sprite.Group()
+    gravitys = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -373,7 +383,7 @@ def main():
 
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 if key_lst[pg.K_LSHIFT]:
-                    # 弾幕発射（Shift + Space）
+                    # 弾幕発射（Shift + Space） 
                     nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
                     beams.add(*nbeam.gen_beams())
                 else:

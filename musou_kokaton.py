@@ -101,7 +101,38 @@ class Bird(pg.sprite.Sprite):
             self.image = self.imgs[self.dire]
         screen.blit(self.image, self.rect)
 
+# ---- 追加：防御壁クラス ----
+class Shield(pg.sprite.Sprite):
+    def __init__(self, bird, life):
+        super().__init__()
+        # こうかとんの向きを取得
+        self.vx, self.vy = bird.dire
+        # 向きを角度に変換
+        angle = math.degrees(math.atan2(-self.vy, self.vx))
 
+        # Surface生成し長方形を描画 
+        width = 20
+        height = bird.rect.height * 2
+        surf = pg.Surface((width, height))
+        surf.set_colorkey((0, 0, 0))  # 黒を透過
+        pg.draw.rect(surf, (0, 0, 255), (0, 0, width, height))
+
+        # Surfaceを回転
+        self.image = pg.transform.rotozoom(surf, angle, 1.0)
+        self.rect = self.image.get_rect()
+
+        #  向いている方向に1体分ずらして配置 
+        offset_x = self.vx * bird.rect.width
+        offset_y = self.vy * bird.rect.height
+        self.rect.centerx = bird.rect.centerx + offset_x
+        self.rect.centery = bird.rect.centery + offset_y
+
+        self.life = life
+
+    def update(self):
+        self.life -= 1
+        if self.life <= 0:
+            self.kill()
 class Bomb(pg.sprite.Sprite):
     """
     爆弾に関するクラス
@@ -126,6 +157,7 @@ class Bomb(pg.sprite.Sprite):
         self.rect.centerx = emy.rect.centerx
         self.rect.centery = emy.rect.centery+emy.rect.height//2
         self.speed = 6
+        self.state = "active"
 
     def update(self):
         """
@@ -156,13 +188,15 @@ class Beam(pg.sprite.Sprite):
         self.rect.centery = bird.rect.centery+bird.rect.height*self.vy
         self.rect.centerx = bird.rect.centerx+bird.rect.width*self.vx
         self.speed = 10
+        self.state = "active"  # EMPで"inactive"に変更される
+
 
     def update(self):
         """
-        ビームを速度ベクトルself.vx, self.vyに基づき移動させる
-        引数 screen：画面Surface
+        爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
+        EMPによって無効化された爆弾は衝突しても起爆しない
         """
-        self.rect.move_ip(self.speed*self.vx, self.speed*self.vy)
+        self.rect.move_ip(self.speed * self.vx, self.speed * self.vy)
         if check_bound(self.rect) != (True, True):
             self.kill()
     
@@ -196,6 +230,7 @@ class NeoBeam:
         step = 100 // (self.num - 1) if self.num > 1 else 0
         angles = range(-50, 51, step)
         return [Beam(self.bird, angle0=a) for a in angles]
+
 
 
 class Explosion(pg.sprite.Sprite):
@@ -272,6 +307,31 @@ class Score:
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)
 
+
+class EMP:
+    """
+    電磁パルスに関するクラス
+    敵機と爆弾を無効化し，視覚効果を一時的に表示する
+    """
+    def __init__(self, emys: pg.sprite.Group, bombs: pg.sprite.Group, screen: pg.Surface):
+        # 敵機を無効化
+        for emy in emys:
+            emy.interval = float("inf")
+            emy.image = pg.transform.laplacian(emy.image)
+        
+        # 爆弾を無効化
+        for bomb in bombs:
+            bomb.speed /= 2
+            bomb.state = "inactive"  # 独自プロパティを付加（後述で処理）
+
+        # 視覚効果：半透明の黄色い矩形
+        s = pg.Surface((WIDTH, HEIGHT))
+        s.set_alpha(128)
+        s.fill((255, 255, 0))
+        screen.blit(s, (0, 0))
+        pg.display.update()
+        pg.time.wait(50)  # 0.05秒表示
+
 class Gravity(pg.sprite.Sprite):
     def __init__(self, life: int = 400):
         super().__init__()
@@ -291,13 +351,17 @@ def main():
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     bg_img = pg.image.load(f"fig/pg_bg.jpg")
     score = Score()
+    score.value=10000
 
     bird = Bird(3, (900, 400))
     bombs = pg.sprite.Group()
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
-    gravitys = pg.sprite.Group()
+    shields = pg.sprite.Group() 
+    SHIELD_COST = 50
+    SHIELD_DURATION = 400
+        gravitys = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -306,6 +370,24 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_SPACE:
+                    beams.add(Beam(bird))
+                if event.key == pg.K_e and score.value >= 20:  # EMP発動条件
+                    EMP(emys, bombs, screen)
+                    score.value -= 20
+                if event.type == pg.KEYDOWN:
+                    if event.key == pg.K_SPACE:
+                        beams.add(Beam(bird))
+                if event.key == pg.K_RETURN and score.value >= 200:
+                    gravitys.add(Gravity())
+                    score.value -= 200
+         # --- 防御壁発動キー（S） ---
+        if key_lst[pg.K_s] and score.value >= SHIELD_COST and len(shields) == 0:
+            shield = Shield(bird, SHIELD_DURATION)
+            shields.add(shield)
+            score.value -= SHIELD_COST
+
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 if key_lst[pg.K_LSHIFT] or key_lst[pg.K_RSHIFT]:
                     # 弾幕発射（Shift + Space）
@@ -333,13 +415,18 @@ def main():
             exps.add(Explosion(bomb, 50))
             score.value += 1
 
-        for bomb in pg.sprite.spritecollide(bird, bombs, True):
+        for bomb in pg.sprite.spritecollide(bird, bombs, False):  # True → Falseに変更
+            if bomb.state == "inactive":
+                bomb.kill()
+                continue  # 起爆せずに消える
             bird.change_img(8, screen)
             score.update(screen)
             pg.display.update()
             time.sleep(2)
             return
-        
+        pg.sprite.groupcollide(shields, bombs, False, True)
+        shields.update()
+        shields.draw(screen)        
         for g in gravitys:
             for bomb in pg.sprite.spritecollide(g, bombs, True):
                 exps.add(Explosion(bomb, 50))

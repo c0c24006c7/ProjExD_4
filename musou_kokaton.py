@@ -48,6 +48,9 @@ class Bird(pg.sprite.Sprite):
         pg.K_RIGHT: (+1, 0),
     }
 
+    state = "normal"
+    hyper_life = 0
+
     def __init__(self, num: int, xy: tuple[int, int]):
         """
         こうかとん画像Surfaceを生成する
@@ -99,6 +102,12 @@ class Bird(pg.sprite.Sprite):
         if not (sum_mv[0] == 0 and sum_mv[1] == 0):
             self.dire = tuple(sum_mv)
             self.image = self.imgs[self.dire]
+        if self.state == "hyper":
+            self.image = pg.transform.laplacian(self.image)
+            self.hyper_life -= 1
+            if self.hyper_life <=0:
+                self.state = "normal"
+        
         screen.blit(self.image, self.rect)
 
 # ---- 追加：防御壁クラス ----
@@ -361,7 +370,7 @@ def main():
     shields = pg.sprite.Group() 
     SHIELD_COST = 50
     SHIELD_DURATION = 400
-        gravitys = pg.sprite.Group()
+    gravitys = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -382,21 +391,25 @@ def main():
                 if event.key == pg.K_RETURN and score.value >= 200:
                     gravitys.add(Gravity())
                     score.value -= 200
-         # --- 防御壁発動キー（S） ---
+        # --- 防御壁発動キー（S） ---
         if key_lst[pg.K_s] and score.value >= SHIELD_COST and len(shields) == 0:
             shield = Shield(bird, SHIELD_DURATION)
             shields.add(shield)
             score.value -= SHIELD_COST
 
-            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-                if key_lst[pg.K_LSHIFT] or key_lst[pg.K_RSHIFT]:
-                    # 弾幕発射（Shift + Space）
-                    nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
-                    beams.add(*nbeam.gen_beams())
-                else:
-                    # 通常の単発ビーム発射
-                    beams.add(Beam(bird))
- 
+        if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+            if key_lst[pg.K_LSHIFT] or key_lst[pg.K_RSHIFT]:
+                # 弾幕発射（Shift + Space）
+                nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
+                beams.add(*nbeam.gen_beams())
+            else:
+                # 通常の単発ビーム発射
+                beams.add(Beam(bird))
+        if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
+            score.value -= 100
+            bird.state = "hyper"
+            bird.hyper_life = 500
+
         screen.blit(bg_img, [0, 0])
 
         if tmr % 200 == 0:
@@ -419,11 +432,15 @@ def main():
             if bomb.state == "inactive":
                 bomb.kill()
                 continue  # 起爆せずに消える
-            bird.change_img(8, screen)
-            score.update(screen)
-            pg.display.update()
-            time.sleep(2)
-            return
+            if bird.state == "hyper":
+                exps.add(Explosion(bomb, 50))
+                score.value += 1
+            else:
+                bird.change_img(8, screen)
+                score.update(screen)
+                pg.display.update()
+                time.sleep(2)
+                return
         pg.sprite.groupcollide(shields, bombs, False, True)
         shields.update()
         shields.draw(screen)        
@@ -450,7 +467,6 @@ def main():
         pg.display.update()
         tmr += 1
         clock.tick(50)
-
 
 
 if __name__ == "__main__":

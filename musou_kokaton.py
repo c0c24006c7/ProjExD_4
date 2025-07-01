@@ -391,25 +391,25 @@ def main():
                 if event.key == pg.K_RETURN and score.value >= 200:
                     gravitys.add(Gravity())
                     score.value -= 200
-         # --- 防御壁発動キー（S） ---
+        # --- 防御壁発動キー（S） ---
         if key_lst[pg.K_s] and score.value >= SHIELD_COST and len(shields) == 0:
             shield = Shield(bird, SHIELD_DURATION)
             shields.add(shield)
             score.value -= SHIELD_COST
 
-            if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
-                if key_lst[pg.K_LSHIFT] or key_lst[pg.K_RSHIFT]:
-                    # 弾幕発射（Shift + Space）
-                    nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
-                    beams.add(*nbeam.gen_beams())
-                else:
-                    # 通常の単発ビーム発射
-                    beams.add(Beam(bird))
-            if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
-                score.value -= 100
-                bird.state = "hyper"
-                bird.hyper_life = 500
- 
+        if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+            if key_lst[pg.K_LSHIFT] or key_lst[pg.K_RSHIFT]:
+                # 弾幕発射（Shift + Space）
+                nbeam = NeoBeam(bird, num=5)  # ビーム数は必要に応じて調整
+                beams.add(*nbeam.gen_beams())
+            else:
+                # 通常の単発ビーム発射
+                beams.add(Beam(bird))
+        if event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT and score.value >= 100:
+            score.value -= 100
+            bird.state = "hyper"
+            bird.hyper_life = 500
+
         screen.blit(bg_img, [0, 0])
 
         if tmr % 200 == 0:
@@ -435,7 +435,6 @@ def main():
             if bird.state == "hyper":
                 exps.add(Explosion(bomb, 50))
                 score.value += 1
-                print(bird.state)
             else:
                 bird.change_img(8, screen)
                 score.update(screen)
@@ -468,7 +467,6 @@ def main():
         pg.display.update()
         tmr += 1
         clock.tick(50)
-
 
 
 if __name__ == "__main__":
